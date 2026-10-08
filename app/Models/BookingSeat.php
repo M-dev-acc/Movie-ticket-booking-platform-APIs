@@ -18,7 +18,7 @@ class BookingSeat extends Model
 
     protected $fillable = [
         'booking_id',
-        'seat_id',
+        'show_seat_id',
         'price_paid',
         'status',
     ];
@@ -28,6 +28,6 @@ class BookingSeat extends Model
     }
 
     public function seat(){
-        return $this->belongsTo(Seat::class);
+        return $this->belongsTo(ShowSeat::class);
     }
 }

@@ -50,7 +50,7 @@ class BookingService
         $currentTimestamp = now();
         $bookingSeatsData = $showSeats->map(fn($showSeat) => [
             'booking_id' => $booking->id,
-            'seat_id' => $showSeat->seat_id,
+            'seat_id' => $showSeat->show_seat_id,
             'price_paid' => $showSeat->price,
             'status' => BookingSeat::STATUS_PENDING,
             'created_at' => $currentTimestamp,
