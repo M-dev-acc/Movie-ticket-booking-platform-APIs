@@ -35,7 +35,7 @@ return new class extends Migration
             $table->unique(
                 ['booking_id', 'show_seat_id']
             );
-            $table->index('show_seat_id');
+
 
             DB::statement("CREATE UNIQUE INDEX booking_seats_one_active_holder
                ON booking_seats (show_seat_id) WHERE status IN ('pending','confirmed')");
