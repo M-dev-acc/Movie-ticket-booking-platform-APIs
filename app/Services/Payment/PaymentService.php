@@ -93,8 +93,7 @@ class PaymentService
             ]);
 
             $seatIds = $booking->bookingSeats()->pluck('show_seat_id');
-            ShowSeat::where('show_id', $booking->show_id)
-                ->whereIn('seat_id', $seatIds)
+            ShowSeat::whereIn('id', $seatIds)
                 ->update([
                     'status' => ShowSeat::STATUS_BOOKED,
                     'locked_until' => null,
