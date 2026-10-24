@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             TheaterSeeder::class,
             UserSeeder::class,
+            DemoShowSeeder::class,
         ]);
     }
 }
