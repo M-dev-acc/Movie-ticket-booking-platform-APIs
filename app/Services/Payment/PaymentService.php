@@ -137,7 +137,7 @@ class PaymentService
             ]);
 
             ShowSeat::where('show_id', $booking->show_id)
-                ->whereIn('seat_id', $seatIds)
+                ->whereIn('id', $seatIds)
                 ->update([
                     'status' => ShowSeat::STATUS_AVAILABLE,
                     'locked_until' => null,
