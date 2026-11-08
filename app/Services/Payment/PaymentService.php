@@ -80,6 +80,12 @@ class PaymentService
             ]);
 
             return;
+        } else if($payment->status === Payment::STATUS_CAPTURED){
+            Log::warning('Payment was already captured!', [
+                'gateway_order_id' => $gatewayOrderId,
+            ]);
+
+            return;
         }
 
         $booking = $payment->booking;
