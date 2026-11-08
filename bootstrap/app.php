@@ -1,15 +1,19 @@
 <?php
 
+use App\Exceptions\Booking\SeatUnavailableException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Spatie\Permission\Exceptions\UnauthorizedException;
 use Symfony\Component\HttpKernel\Exception\{
     AccessDeniedHttpException,
+    HttpExceptionInterface,
     MethodNotAllowedHttpException,
     NotFoundHttpException
 };
@@ -113,23 +117,41 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 405);
         });
 
+        // ── 409 Resource not available ───────────────────────────────────────────
+        // Fired when the resource is not available to complete the request.
+        $exceptions->render(function (SeatUnavailableException $exception) {
+            return response()->json([
+                'status' => false,
+                'message' => $exception->getMessage(),
+                'errors' => null
+            ], 409);
+        });
+
         // ── 500 Fallback ─────────────────────────────────────────────────────
         // Catches anything not handled above.
         // In production: hides the real error message for security.
-        // $exceptions->render(function (\Throwable $exception) {
-        //     return response()->json([
-        //         'status' => false,
-        //         'message' => app()->isProduction()
-        //             ? 'Something went wrong. Please try again later.'
-        //             : $exception->getMessage(),
-        //         'errors'  => app()->isProduction()
-        //             ? null
-        //             : [
-        //                 'exception' => get_class($exception),
-        //                 'file'      => $exception->getFile(),
-        //                 'line'      => $exception->getLine(),
-        //             ],
-        //     ], 500);
-        // });
+        $exceptions->render(function (\Throwable $exception) {
+            if ($exception instanceof ValidationException
+                || $exception instanceof HttpResponseException
+                || $exception instanceof HttpExceptionInterface) {
+                return null;
+            }
+
+            $debug = (bool) config('app.debug');
+
+            return response()->json([
+                'status' => false,
+                'message' => $debug
+                    ? 'Something went wrong. Please try again later.'
+                    : $exception->getMessage(),
+                'errors'  => $debug
+                    ? null
+                    : [
+                        'exception' => get_class($exception),
+                        'file'      => $exception->getFile(),
+                        'line'      => $exception->getLine(),
+                    ],
+            ], 500);
+        });
 
     })->create();
