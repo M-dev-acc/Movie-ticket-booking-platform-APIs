@@ -20,6 +20,7 @@ class Booking extends Model
     public const STATUS_CONFIRMED = 'confirmed';
     public const STATUS_CANCELLED = 'cancelled';
     public const STATUS_FAILED = 'failed';
+    public const STATUS_EXPIRED = 'expired';
 
     public const STATUSES = [
         self::STATUS_PENDING,
@@ -28,6 +29,12 @@ class Booking extends Model
         self::STATUS_CONFIRMED,
         self::STATUS_CANCELLED,
         self::STATUS_FAILED,
+        self::STATUS_EXPIRED,
+    ];
+
+    public const ACTIVE_STATUSES = [
+        self::STATUS_RESERVED,
+        self::STATUS_PAYMENT_PENDING,
     ];
 
     protected $fillable = [

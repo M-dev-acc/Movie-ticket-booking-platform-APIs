@@ -110,4 +110,64 @@ class BookingService
 
         return $total;
     }
+
+    /**
+     * End several bookings at once and give their seats back. The ONE place that does it.
+     *
+     * Used by: the expiry job (EXPIRED), cancel (CANCELLED), later payment failure (FAILED).
+     * Returns how many bookings were actually ended. Bookings that are no longer active
+     * (already ended, or confirmed by a webhook a moment ago) are left alone.
+     *
+     * $skipLocked: the expiry job passes true, so a booking being handled right now by a
+     * webhook is skipped instead of waited for (the next run sees it again). Cancel passes
+     * false and waits, because the user needs a definite answer.
+     */
+    public function releaseHolds(array $bookingIds, string $endStatus, bool $skipLocked = false): int
+    {
+        if ($bookingIds === []) {
+            return 0;
+        }
+ 
+        return DB::transaction(function () use ($bookingIds, $endStatus, $skipLocked): int {
+            // Lock only the bookings that are still active. PostgreSQL applies the status
+            // filter to the locked, up-to-date row, so a booking confirmed while we waited
+            // drops out. orderBy('id') = same lock order everywhere, so no deadlocks.
+            $query = Booking::query()
+                ->whereIn('id', $bookingIds)
+                ->whereIn('status', Booking::ACTIVE_STATUSES)
+                ->orderBy('id');
+ 
+            $skipLocked ? $query->lock('for update skip locked') : $query->lockForUpdate();
+ 
+            $ids = $query->pluck('id')->all();
+ 
+            if ($ids === []) {
+                return 0;
+            }
+ 
+            // The seats these bookings hold, found through their own pending lines.
+            ShowSeat::where('status', ShowSeat::STATUS_LOCKED)
+                ->whereIn('id', BookingSeat::select('show_seat_id')
+                    ->whereIn('booking_id', $ids)
+                    ->where('status', BookingSeat::STATUS_PENDING))
+                ->update([
+                    'status' => ShowSeat::STATUS_AVAILABLE,
+                    'locked_until' => null,
+                ]);
+ 
+            BookingSeat::whereIn('booking_id', $ids)
+                ->where('status', BookingSeat::STATUS_PENDING)
+                ->update(['status' => BookingSeat::STATUS_CANCELLED]);
+ 
+            Booking::whereIn('id', $ids)->update(['status' => $endStatus]);
+ 
+            return count($ids);
+        });
+    }
+ 
+    /** One booking. Returns false (nothing changed) when it is not active any more. */
+    public function releaseHold(int $bookingId, string $endStatus): bool
+    {
+        return $this->releaseHolds([$bookingId], $endStatus) === 1;
+    }
 }
