@@ -27,6 +27,7 @@ return new class extends Migration
                 'confirmed',
                 'cancelled',
                 'failed',
+                'expired',
             ])->default('pending');
             $table->decimal('total_amount', 8, 2)->default(0);
             $table->dateTime('booked_at');
