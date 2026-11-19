@@ -2,12 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreBookingRequest;
 use App\Http\Resources\Booking\BookingResource;
 use App\Models\Booking;
-use App\Http\Requests\{
-    StoreBookingRequest,
-    UpdateBookingRequest
-};
 use App\Services\BookingService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -18,8 +15,7 @@ class BookingController extends Controller
 
     public function __construct(
         private BookingService $service
-    ) {
-    }
+    ) {}
 
     /**
      * Display a listing of the resource.
@@ -29,6 +25,7 @@ class BookingController extends Controller
         $bookings = Booking::latest()
             ->where('user_id', auth()->id())
             ->paginate(20);
+
         return $this->success($bookings, message: 'Bookings list');
     }
 
@@ -40,6 +37,7 @@ class BookingController extends Controller
         $this->authorize('create', Booking::class);
 
         $bookingDetails = $this->service->createBooking($request->validated());
+
         return $this->success(
             data: new BookingResource($bookingDetails),
             message: 'Show booked successfully!');
@@ -58,13 +56,16 @@ class BookingController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Cancel the specified booking.
      */
-    public function destroy(Booking $booking)
+    public function cancel(Booking $booking)
     {
         $this->authorize('delete', $booking);
 
-        $booking->delete();
+        $released = $this->service->releaseHold($booking->id, Booking::STATUS_CANCELLED);
+        if (! $released && $booking->fresh()->status !== Booking::STATUS_CANCELLED) {
+            return $this->error(409, 'Booking cannot be cancelled in its current state.');
+        }
 
         return $this->noContent('Booking cancelled successfully');
     }

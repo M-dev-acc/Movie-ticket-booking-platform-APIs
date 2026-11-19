@@ -89,7 +89,7 @@ Route::group([
                     // ->middleware('permission:Create Booking');
                 Route::get('/{booking}', 'show');
                     // ->middleware('permission:Read Booking');
-                Route::delete('/{booking}/cancel', 'destroy');
+                Route::delete('/{booking}/cancel', 'cancel');
                     // ->middleware('permission:Delete Booking');
             });
     });

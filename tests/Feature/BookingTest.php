@@ -131,6 +131,78 @@ class BookingTest extends TestCase
         $this->assertSame($this->user->id, Booking::firstOrFail()->user_id);
     }
 
+    #[Test]
+    public function cancelling_a_booking_releases_its_seats_and_preserves_its_history(): void
+    {
+        $seat = $this->seats(1)->firstOrFail();
+        $this->bookAs($this->user, $this->payload(collect([$seat])))->assertOk();
+
+        $booking = Booking::firstOrFail();
+        $bookingSeat = BookingSeat::where('booking_id', $booking->id)->firstOrFail();
+        $showSeat = $this->showSeatFor($seat);
+
+        $this->cancelAs($this->user, $booking)->assertNoContent();
+
+        $booking->refresh();
+        $bookingSeat->refresh();
+        $showSeat->refresh();
+
+        $this->assertSame(Booking::STATUS_CANCELLED, $booking->status);
+        $this->assertNull($booking->deleted_at, 'Cancellation must not soft-delete the booking.');
+        $this->assertSame(BookingSeat::STATUS_CANCELLED, $bookingSeat->status);
+        $this->assertSame(ShowSeat::STATUS_AVAILABLE, $showSeat->status);
+        $this->assertNull($showSeat->locked_until);
+        $this->assertSame(1, Booking::count());
+        $this->assertSame(1, BookingSeat::count());
+
+        $this->cancelAs($this->user, $booking)->assertNoContent();
+    }
+
+    #[Test]
+    public function cancelling_a_payment_pending_booking_releases_its_seats(): void
+    {
+        $seat = $this->seats(1)->firstOrFail();
+        $this->bookAs($this->user, $this->payload(collect([$seat])))->assertOk();
+
+        $booking = Booking::firstOrFail();
+        $booking->update(['status' => Booking::STATUS_PAYMENT_PENDING]);
+
+        $this->cancelAs($this->user, $booking)->assertNoContent();
+
+        $bookingSeat = BookingSeat::where('booking_id', $booking->id)->firstOrFail();
+        $showSeat = $this->showSeatFor($seat);
+
+        $this->assertSame(Booking::STATUS_CANCELLED, $booking->fresh()->status);
+        $this->assertSame(BookingSeat::STATUS_CANCELLED, $bookingSeat->status);
+        $this->assertSame(ShowSeat::STATUS_AVAILABLE, $showSeat->status);
+        $this->assertNull($showSeat->locked_until);
+    }
+
+    #[Test]
+    public function a_confirmed_booking_cannot_be_cancelled_as_a_seat_hold(): void
+    {
+        $seat = $this->seats(1)->firstOrFail();
+        $this->bookAs($this->user, $this->payload(collect([$seat])))->assertOk();
+
+        $booking = Booking::firstOrFail();
+        $booking->update(['status' => Booking::STATUS_CONFIRMED]);
+        BookingSeat::where('booking_id', $booking->id)
+            ->update(['status' => BookingSeat::STATUS_CONFIRMED]);
+        $showSeat = $this->showSeatFor($seat);
+        $showSeat->update([
+            'status' => ShowSeat::STATUS_BOOKED,
+            'locked_until' => null,
+        ]);
+
+        $this->cancelAs($this->user, $booking)
+            ->assertStatus(409);
+
+        $this->assertSame(Booking::STATUS_CONFIRMED, $booking->fresh()->status);
+        $this->assertSame(BookingSeat::STATUS_CONFIRMED, $booking->bookingSeats()->firstOrFail()->status);
+        $this->assertSame(ShowSeat::STATUS_BOOKED, $showSeat->fresh()->status);
+        $this->assertNull($booking->fresh()->deleted_at);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private function makeUser(): User
@@ -174,5 +246,13 @@ class BookingTest extends TestCase
         $this->app['auth']->forgetGuards();
 
         return $this->actingAs($user, 'web')->postJson(self::URL, $payload);
+    }
+
+    private function cancelAs(User $user, Booking $booking): TestResponse
+    {
+        $this->app['auth']->forgetGuards();
+
+        return $this->actingAs($user, 'web')
+            ->deleteJson("/api/v1/bookings/{$booking->id}/cancel");
     }
 }
